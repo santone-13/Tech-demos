@@ -1,0 +1,61 @@
+# One Cloudflare Pages project ("tech-demos"). Each apps/<slug> is published at /<slug>/.
+# Fails closed when CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is unset. Values are never printed.
+
+name: Cloudflare Pages
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy previews
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require Cloudflare secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            missing+=("CLOUDFLARE_API_TOKEN")
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            missing+=("CLOUDFLARE_ACCOUNT_ID")
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing GitHub Actions secret(s): ${missing[*]}. Set them on this repository (Settings → Secrets and variables → Actions). Secret values are not printed."
+            exit 1
+          fi
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Assemble apps into one Pages tree
+        run: bash scripts/assemble-pages.sh
+
+      # bun installs Wrangler in this checkout, so the root bunfig.toml age policy applies.
+      # Slashes in the git ref are folded so the Pages preview alias stays one branch name.
+      - name: Deploy to the tech-demos Pages project
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: bun
+          wranglerVersion: "4"
+          command: "pages deploy dist/pages --project-name=tech-demos --commit-hash=${{ github.sha }} --branch=${{ replace((github.event_name == 'pull_request' && github.head_ref) || github.ref_name, '/', '-') }}"

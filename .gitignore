@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# bun
+.bun/
+
+# build output
+dist/
+build/
+out/
+.output/
+.wrangler/
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+*.tsbuildinfo
+
+# env and secrets
+.env
+.env.*
+!.env.example
+
+# logs and caches
+*.log
+.cache/
+.turbo/
+coverage/
+.eslintcache
+
+# OS and editor
+.DS_Store
+Thumbs.db
